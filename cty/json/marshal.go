@@ -8,6 +8,8 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
+var EscapeHTML bool
+
 func marshal(val cty.Value, t cty.Type, path cty.Path, b *bytes.Buffer) error {
 	if val.IsMarked() {
 		return path.NewErrorf("value has marks, so it cannot be serialized as JSON")
@@ -34,11 +36,11 @@ func marshal(val cty.Value, t cty.Type, path cty.Path, b *bytes.Buffer) error {
 	case t.IsPrimitiveType():
 		switch t {
 		case cty.String:
-			json, err := json.Marshal(val.AsString())
+			jsonBytes, err := marshalEnc(val.AsString())
 			if err != nil {
 				return path.NewErrorf("failed to serialize value: %s", err)
 			}
-			b.Write(json)
+			b.Write(jsonBytes)
 			return nil
 		case cty.Number:
 			if val.RawEquals(cty.PositiveInfinity) || val.RawEquals(cty.NegativeInfinity) {
@@ -164,7 +166,7 @@ func marshal(val cty.Value, t cty.Type, path cty.Path, b *bytes.Buffer) error {
 		return nil
 	case t.IsCapsuleType():
 		rawVal := val.EncapsulatedValue()
-		jsonVal, err := json.Marshal(rawVal)
+		jsonVal, err := marshalEnc(rawVal)
 		if err != nil {
 			return path.NewError(err)
 		}
@@ -192,4 +194,12 @@ func marshalDynamic(val cty.Value, path cty.Path, b *bytes.Buffer) error {
 	b.Write(typeJSON)
 	b.WriteRune('}')
 	return nil
+}
+
+func marshalEnc(i interface{}) ([]byte, error) {
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(EscapeHTML)
+	err := enc.Encode(i)
+	return bytes.TrimRight(buf.Bytes(), "\n"), err
 }
